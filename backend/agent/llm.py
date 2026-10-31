@@ -123,6 +123,7 @@ Rules:
 - Use only numbers, amounts, ids and links that appear in the facts, written exactly as they appear there (for example "₹16,179"). Never invent, round or estimate any.
 - Greet with Namaste only when facts.first_message is true. Otherwise start directly with the answer.
 - Use ONE script for the whole message. Never mix Devanagari and Latin letters.
+- If the language is "en", write plain English, even if earlier messages in the conversation were in Hindi.
 - Copy links exactly as given. Do not repeat identifiers like PAN or account numbers or anything in <angle_brackets>.
 - Say what happened, what was done and what happens next. Do not promise outcomes.
 Reply with the message text only."""

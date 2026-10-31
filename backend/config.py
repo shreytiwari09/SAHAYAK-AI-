@@ -1,3 +1,4 @@
+import os
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -29,7 +30,8 @@ class Settings(BaseSettings):
     # sends, such as the KYC link, are built from it, and the mock Paytm is served under /mock.
     # When set, requests from outside this machine must present it (see backend/access.py).
     access_key: str = ""
-    public_base_url: str = ""
+    # Where phones reach this server (for KYC and bank links). Render provides RENDER_EXTERNAL_URL.
+    public_base_url: str = os.environ.get("RENDER_EXTERNAL_URL", "")
     voice_replies: bool = True
     sarvam_api_key: str = ""
     sarvam_tts_model: str = "bulbul:v4-flash"

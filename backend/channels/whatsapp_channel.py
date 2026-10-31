@@ -34,7 +34,7 @@ WAITING_FOR = {
     "power_cycle": "switch the device off and on again",
 }
 VOICE_KINDS = {
-    "resolved", "escalated", "explain", "refuse", "offer", "stalled", "power_cycle",
+    "answer", "resolved", "escalated", "explain", "refuse", "offer", "stalled", "power_cycle",
     "kyc_link", "bank_update", "approval_pending", "offer_thanks", "offer_declined", "no_offer",
 }  # fmt: skip
 
@@ -173,7 +173,11 @@ class WhatsAppChannel:
 
         # Anything else is a conversation turn. It carries what was said so far, and when
         # something is already open it answers without starting a second fix.
-        context: dict = {"history": conv.history[:-1], "disclosed": conv.disclosed}
+        context: dict = {
+            "history": conv.history[:-1],
+            "disclosed": conv.disclosed,
+            "from_voice": conv.voice,
+        }
         if waiting:
             context.update(chat_only=True, open_note=self._open_note(waiting))
         started = self.service.start(merchant, text, channel="whatsapp", **context)

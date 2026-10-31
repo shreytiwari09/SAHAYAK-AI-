@@ -102,6 +102,7 @@ class AgentState(TypedDict, total=False):
     messages: list[str]
     disclosed: bool
     agent_name: str
+    from_voice: bool
     verified: bool
     proof: dict
     proof_text: str
@@ -172,6 +173,10 @@ def build_graph(deps: Deps, checkpointer: Any = None):
         profile = state["ctx"]["profile"]
         lang = cls.get("language") or profile["language"]
         script = cls.get("script", "latin")
+        if state.get("from_voice"):
+            script = (
+                "latin"  # speech-to-text writes Devanagari; merchants read Hinglish on WhatsApp
+            )
         address = profile["owner_name"].split()[0] + " ji"
         text, fallback_reason = "", None
         if use_llm:

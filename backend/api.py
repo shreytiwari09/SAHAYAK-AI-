@@ -155,7 +155,7 @@ def create_app(provider: Callable[[], ApiContext], lifespan: Any = None) -> Fast
         except KeyError:
             raise HTTPException(404, f"no case {thread_id}") from None
 
-    @app.get("/health")
+    @app.api_route("/health", methods=["GET", "HEAD"])  # uptime monitors send HEAD
     async def health():
         return {"status": "ok", "cases": len(ctx.service.cases)}
 

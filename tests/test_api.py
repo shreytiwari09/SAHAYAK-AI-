@@ -280,3 +280,8 @@ async def test_agents_listing_and_filtering_cases_by_rep(api):
     mine = (await api.get("/cases", params={"agent_id": owner})).json()
     other = (await api.get("/cases", params={"agent_id": "nobody"})).json()
     assert [c["thread_id"] for c in mine] == [tid] and other == []
+
+
+async def test_health_answers_head_requests_for_uptime_monitors(api):
+    assert (await api.head("/health")).status_code == 200
+    assert (await api.get("/health")).json()["status"] == "ok"

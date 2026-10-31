@@ -1,0 +1,12 @@
+.env
+.venv
+.git
+data
+__pycache__
+.pytest_cache
+.ruff_cache
+.hallmark
+console/node_modules
+console/dist
+console/.hallmark
+eval/results_live_*.json.bak

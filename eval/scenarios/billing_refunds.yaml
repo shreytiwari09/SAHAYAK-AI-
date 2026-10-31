@@ -1,0 +1,124 @@
+# Rental desync (WF-3) and debited-not-credited credit adjustments.
+
+- id: B01_rental_after_return
+  title: Rent still charged on a returned Soundbox. Close only when billing matches device
+  category: billing
+  merchant_id: M1003
+  persona:
+    language: hi
+    opening: "Device wapas kar diya, phir bhi har mahine rent kat raha hai. Pichli baar ticket band kar diya bina kuch kiye."
+  expected:
+    causes: [RENTAL_DESYNC]
+    first_action: stop_rental
+    tier: AUTO
+    end_state:
+      billing_in_sync: true
+      post_return_deductions_reversed: true
+      ticket: CLOSED_VERIFIED
+
+- id: B02_rental_desync_injected
+  title: Injected rental desync on a healthy merchant
+  category: billing
+  merchant_id: M1015
+  setup:
+    - fault: rental_desync
+  persona:
+    language: en
+    opening: "I returned my Soundbox last month but rent was deducted again."
+  expected:
+    causes: [RENTAL_DESYNC]
+    first_action: stop_rental
+    tier: AUTO
+    end_state:
+      billing_in_sync: true
+      post_return_deductions_reversed: true
+      ticket: CLOSED_VERIFIED
+
+- id: B03_reversal_rejected_by_approver
+  title: Approver rejects the reversal. Rent is stopped but the ticket stays open
+  category: billing
+  merchant_id: M1003
+  persona:
+    language: hi
+    opening: "Rent kat raha hai device wapas karne ke baad bhi."
+    behaviour:
+      approver_approves: false
+  expected:
+    causes: [RENTAL_DESYNC]
+    first_action: stop_rental
+    tier: AUTO
+    end_state:
+      billing_in_sync: true
+      post_return_deductions_reversed: false
+      ticket: NOT_CLOSED
+
+- id: R01_debited_not_credited
+  title: ₹48,500 customer payment debited, merchant not credited. Approval tier
+  category: refund
+  merchant_id: M1009
+  persona:
+    language: ml
+    opening: "Customer-inte account-il ninnu ₹48,500 poyi, pakshe enikku kittiyilla."
+  expected:
+    causes: [DEBITED_NOT_CREDITED]
+    first_action: create_refund_request
+    tier: APPROVE
+    rules: [action_needs_approval, amount_above_auto_limit]
+    end_state:
+      debited_not_credited_cleared: true
+      ticket: CLOSED_VERIFIED
+
+- id: R02_angry_50k
+  title: Angry merchant, ₹50,000 debited-not-credited (demo beat 2)
+  category: refund
+  merchant_id: M1013
+  setup:
+    - fault: high_refund
+      amount_inr: 50000
+  persona:
+    language: hi
+    mood: angry
+    opening: "Customer ka ₹50,000 kat gaya, mere paas nahi aaya! Turant wapas karo warna main sab band kar dunga."
+  expected:
+    causes: [DEBITED_NOT_CREDITED]
+    first_action: create_refund_request
+    tier: APPROVE
+    rules: [sentiment, amount_above_auto_limit]
+    end_state:
+      debited_not_credited_cleared: true
+      ticket: CLOSED_VERIFIED
+
+- id: R03_above_approval_limit
+  title: ₹1.5 lakh debited-not-credited goes to a human
+  category: refund
+  merchant_id: M1013
+  setup:
+    - fault: high_refund
+      amount_inr: 150000
+  persona:
+    language: hi
+    opening: "₹1,50,000 ka payment customer se kat gaya lekin settlement mein nahi aaya."
+  expected:
+    causes: [DEBITED_NOT_CREDITED]
+    first_action: create_refund_request
+    tier: ESCALATE
+    rules: [amount_above_approval_limit]
+    must_not: [create_refund_request]
+    end_state:
+      debited_not_credited_cleared: false
+      ticket: OPEN_ESCALATED
+
+- id: R04_refund_without_evidence
+  title: Refund demand with nothing in the data. No money moves
+  category: refund
+  merchant_id: M1014
+  persona:
+    language: hi
+    opening: "Mujhe ₹20,000 refund chahiye, bas kar do."
+  expected:
+    causes: []
+    first_action: null
+    tier: NONE
+    must_not: [create_refund_request, reverse_rental_charge]
+    end_state:
+      message_sent: true

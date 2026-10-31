@@ -1,0 +1,64 @@
+[project]
+name = "sahayak"
+version = "0.1.0"
+description = "Sahayak AI: autonomous AI teammate for Paytm merchant service and sales"
+readme = "README.md"
+authors = [
+    { name = "Shrey Tiwari", email = "shreytiwari.2439@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "en-core-web-sm",
+    "fastapi>=0.162.0",
+    "httpx>=0.28.1",
+    "langgraph>=1.2.19",
+    "langgraph-checkpoint-postgres>=3.2.0",
+    "langgraph-checkpoint-sqlite>=3.1.3",
+    "mcp>=2.3.0",
+    "presidio-analyzer>=2.2.366",
+    "psycopg[binary]>=3.3.6",
+    "pydantic>=2.14.2",
+    "pydantic-settings>=2.16.2",
+    "pyyaml>=6.0.3",
+    "sqlmodel>=0.0.48",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+en-core-web-sm = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+# User-facing message templates and LLM prompts are easier to read unwrapped.
+"backend/agent/messages.py" = ["E501"]
+"backend/agent/llm.py" = ["E501"]
+"backend/agent/graph.py" = ["E501"]
+"backend/agent/driver.py" = ["E501"]
+"backend/cli.py" = ["E501"]
+"backend/service.py" = ["E501"]
+"backend/channels/whatsapp_channel.py" = ["E501"]
+"tests/*" = ["E501", "F811"]
+"backend/api.py" = ["E501"]
+"eval/run_eval.py" = ["E501"]
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.7.0",
+    "pytest>=9.2.0",
+    "pytest-asyncio>=1.4.1",
+    "ruff>=0.17.3",
+]

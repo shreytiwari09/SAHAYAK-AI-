@@ -1,0 +1,82 @@
+# Device scenarios (WF-2): proactive detection, dual control, replacement.
+
+- id: D01_offline_proactive
+  title: Soundbox goes silent. Sahayak messages first, merchant power-cycles
+  category: device
+  merchant_id: M1002
+  trigger: proactive
+  persona:
+    language: ta
+  expected:
+    causes: [DEVICE_OFFLINE]
+    first_action: remote_device_reset
+    tier: AUTO
+    must_not: [book_device_replacement]
+    end_state:
+      device_online: true
+      message_sent: true
+      ticket: CLOSED_VERIFIED
+
+- id: D02_offline_reported_tamil
+  title: Merchant reports a silent Soundbox in Tamil-English
+  category: device
+  merchant_id: M1002
+  persona:
+    language: ta
+    opening: "Soundbox payment announce pannala, rendu mani neram aachu."
+  expected:
+    causes: [DEVICE_OFFLINE]
+    first_action: remote_device_reset
+    tier: AUTO
+    must_not: [book_device_replacement]
+    end_state:
+      device_online: true
+      ticket: CLOSED_VERIFIED
+
+- id: D03_soft_fault_remote_reset
+  title: Firmware hang fixed by a remote reset alone
+  category: device
+  merchant_id: M1015
+  setup:
+    - fault: heartbeat_loss
+      device_fault: SOFT
+  persona:
+    language: hi
+    opening: "Soundbox bol nahi raha, payment ka awaaz nahi aa rahi."
+  expected:
+    causes: [DEVICE_OFFLINE]
+    first_action: remote_device_reset
+    tier: AUTO
+    end_state:
+      device_online: true
+      ticket: CLOSED_VERIFIED
+
+- id: D04_hard_fault_replacement
+  title: Hardware fault. Reset and power-cycle fail, replacement needs approval
+  category: device
+  merchant_id: M1012
+  persona:
+    language: hi
+    opening: "Soundbox subah se band hai, on-off bhi kar ke dekh liya."
+  expected:
+    causes: [DEVICE_OFFLINE]
+    first_action: remote_device_reset
+    tier: AUTO
+    end_state:
+      replacement_booked: true
+      ticket: CLOSED_VERIFIED
+
+- id: D05_returned_device_not_reset
+  title: Merchant asks about a device they already returned. No reset
+  category: device
+  merchant_id: M1003
+  persona:
+    language: hi
+    opening: "Soundbox wapas kar diya tha, phir bhi app mein dikh raha hai aur paise kat rahe hain."
+  expected:
+    causes: [RENTAL_DESYNC]
+    first_action: stop_rental
+    tier: AUTO
+    must_not: [remote_device_reset, book_device_replacement]
+    end_state:
+      billing_in_sync: true

@@ -1,0 +1,17 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+*.db
+*.sqlite3
+.DS_Store
+
+console/node_modules/
+console/dist/
+console/.hallmark/
+
+# local runtime data (WhatsApp links hold a phone number) and design-tool scratch
+data/
+.hallmark/

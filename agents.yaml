@@ -1,0 +1,9 @@
+# Which AI sales rep looks after which merchants. One rep handles several merchants at once:
+# its cases run concurrently, up to `concurrency`. A merchant not listed here is given to a rep
+# by a fixed rule, so every merchant always has one.
+# The MVP runs one rep for one merchant (Ramesh, whose WhatsApp number is linked in WHATSAPP_LINKS).
+concurrency: 3
+agents:
+  - id: asha
+    name: Asha
+    merchants: [M1001]

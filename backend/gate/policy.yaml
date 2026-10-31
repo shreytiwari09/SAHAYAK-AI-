@@ -1,0 +1,58 @@
+# Sahayak guardrail policy (PRD §6, design decision D2).
+# The LLM proposes an action; this file decides whether it runs on its own (AUTO), waits for a
+# one-click human approval (APPROVE), or goes to a human with the full case (ESCALATE).
+# Ops can change these numbers without touching prompts or code.
+
+version: 1
+
+# Kill switch: when true, every write action needs human approval (FREE-AI Rec 21, fallback).
+kill_switch: false
+
+thresholds:
+  auto_min_confidence: 0.85
+  approve_min_confidence: 0.60
+  auto_max_amount_inr: 25000
+  approve_max_amount_inr: 100000
+  # The same issue raised this many times (including the current contact) goes to a human.
+  repeat_contact_escalate_at: 3
+
+confidence_weights:
+  evidence_rule_match: 0.4
+  self_consistency: 0.3
+  verifier_pass: 0.2
+  schema_valid: 0.1
+
+# Signals that always send the case to a human, whatever the confidence.
+always_escalate_signals:
+  - fraud_suspected
+  - chargeback_or_dispute
+  - legal_or_ombudsman_mention
+  - prompt_injection_detected
+  - kyc_name_mismatch
+  - risk_review_hold
+  - merchant_requested_human
+
+# Sentiments that block AUTO (the action still runs after one human click).
+approve_if_sentiment:
+  - angry
+
+# Every write tool the agent can propose. Anything not listed is escalated.
+#   reversible:   the effect can be undone cheaply
+#   max_tier:     the most autonomy this action may ever get (AUTO or APPROVE)
+#   moves_money:  amount_inr is checked against the amount thresholds
+actions:
+  send_kyc_link:            { reversible: true,  max_tier: AUTO,    moves_money: false }
+  raise_bank_update:        { reversible: true,  max_tier: AUTO,    moves_money: false }
+  retrigger_settlement:     { reversible: true,  max_tier: AUTO,    moves_money: true }
+  remote_device_reset:      { reversible: true,  max_tier: AUTO,    moves_money: false }
+  stop_rental:              { reversible: true,  max_tier: AUTO,    moves_money: false }
+  create_ticket:            { reversible: true,  max_tier: AUTO,    moves_money: false }
+  update_ticket:            { reversible: true,  max_tier: AUTO,    moves_money: false }
+  close_ticket:             { reversible: true,  max_tier: AUTO,    moves_money: false }
+  # A message changes no merchant state, so it counts as reversible for gating.
+  send_message:             { reversible: true,  max_tier: AUTO,    moves_money: false }
+  record_consent:           { reversible: true,  max_tier: AUTO,    moves_money: false }
+  reverse_rental_charge:    { reversible: false, max_tier: APPROVE, moves_money: true }
+  create_refund_request:    { reversible: false, max_tier: APPROVE, moves_money: true }
+  book_device_replacement:  { reversible: false, max_tier: APPROVE, moves_money: false }
+  create_lead:              { reversible: true,  max_tier: AUTO,    moves_money: false, requires_consent: LOAN_OFFER }

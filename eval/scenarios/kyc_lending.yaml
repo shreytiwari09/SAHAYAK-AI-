@@ -1,0 +1,109 @@
+# Proactive KYC (D13) and consented growth (WF-4, D12).
+
+- id: K01_kyc_expiring_proactive
+  title: KYC expires in 5 days. Proactive reminder before any hold
+  category: kyc
+  merchant_id: M1007
+  trigger: proactive
+  persona:
+    language: mr
+  expected:
+    causes: [KYC_EXPIRING]
+    first_action: send_kyc_link
+    tier: AUTO
+    end_state:
+      kyc_status: VERIFIED
+      message_sent: true
+
+- id: L01_offer_after_fix_haan
+  title: Stuck settlement fixed, then a consented loan offer accepted
+  category: lending
+  merchant_id: M1006
+  persona:
+    language: hi
+    opening: "Parso ka settlement nahi aaya."
+    behaviour:
+      offer_reply: HAAN
+  expected:
+    causes: [SETTLEMENT_STUCK]
+    first_action: retrigger_settlement
+    tier: AUTO
+    end_state:
+      settlements_credited: true
+      consent: GRANTED
+      lead_created: true
+      ticket: CLOSED_VERIFIED
+
+- id: L02_offer_after_fix_nahi
+  title: Merchant says Nahi. Refusal recorded, no lead
+  category: lending
+  merchant_id: M1006
+  persona:
+    language: hi
+    opening: "Parso ka settlement nahi aaya."
+    behaviour:
+      offer_reply: NAHI
+  expected:
+    causes: [SETTLEMENT_STUCK]
+    first_action: retrigger_settlement
+    tier: AUTO
+    must_not: [create_lead]
+    end_state:
+      settlements_credited: true
+      consent: DECLINED
+      lead_created: false
+
+- id: L03_no_offer_when_angry
+  title: Angry merchant gets the fix but no offer
+  category: lending
+  merchant_id: M1001
+  persona:
+    language: hi
+    mood: angry
+    opening: "Paisa kahan hai mera? Do din ho gaye!"
+    behaviour:
+      offer_reply: HAAN
+  expected:
+    causes: [KYC_HOLD]
+    first_action: send_kyc_link
+    tier: APPROVE
+    must_not: [record_consent, create_lead]
+    end_state:
+      settlements_credited: true
+      consent: NONE
+      lead_created: false
+
+- id: L04_no_offer_when_unresolved
+  title: Risk hold escalated. No offer while unresolved
+  category: lending
+  merchant_id: M1005
+  persona:
+    language: gu
+    opening: "Settlement kyare aavse? Ane loan pan joie che."
+    behaviour:
+      offer_reply: HAAN
+  expected:
+    causes: [RISK_HOLD]
+    first_action: null
+    tier: ESCALATE
+    must_not: [record_consent, create_lead, retrigger_settlement]
+    end_state:
+      lead_created: false
+      ticket: OPEN_ESCALATED
+
+- id: L05_merchant_asks_for_loan
+  title: Merchant asks for a loan. KFS shown, consent recorded, lead created
+  category: lending
+  merchant_id: M1010
+  persona:
+    language: pa
+    opening: "Mainu dukaan layi loan chahida, mil sakda?"
+    behaviour:
+      offer_reply: HAAN
+  expected:
+    causes: []
+    first_action: record_consent
+    tier: AUTO
+    end_state:
+      consent: GRANTED
+      lead_created: true

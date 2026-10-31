@@ -1,0 +1,202 @@
+# Settlement scenarios (WF-1, the hero flow and its edges).
+
+- id: S01_kyc_hold_hinglish
+  title: Hero flow. KYC re-verification hold, Hinglish, calm
+  category: settlement
+  merchant_id: M1001
+  persona:
+    language: hi
+    opening: "Mera settlement 2 din se nahi aaya. Kya hua?"
+  expected:
+    causes: [KYC_HOLD]
+    first_action: send_kyc_link
+    tier: AUTO
+    must_not: [create_refund_request, create_lead]
+    end_state:
+      kyc_status: VERIFIED
+      settlements_credited: true
+      ticket: CLOSED_VERIFIED
+      message_sent: true
+
+- id: S02_kyc_hold_devanagari
+  title: KYC hold, Hindi in Devanagari (as from a transcribed voice note)
+  category: settlement
+  merchant_id: M1001
+  persona:
+    language: hi
+    script: devanagari
+    opening: "मेरा पैसा दो दिन से बैंक में नहीं आया, सब ठीक है ना?"
+  expected:
+    causes: [KYC_HOLD]
+    first_action: send_kyc_link
+    tier: AUTO
+    end_state:
+      kyc_status: VERIFIED
+      settlements_credited: true
+      ticket: CLOSED_VERIFIED
+
+- id: S03_kyc_hold_english
+  title: KYC hold, English
+  category: settlement
+  merchant_id: M1001
+  persona:
+    language: en
+    opening: "My settlement for the last two days has not reached my bank account."
+  expected:
+    causes: [KYC_HOLD]
+    first_action: send_kyc_link
+    tier: AUTO
+    end_state:
+      kyc_status: VERIFIED
+      settlements_credited: true
+      ticket: CLOSED_VERIFIED
+
+- id: S04_kyc_hold_angry
+  title: KYC hold, angry merchant. Gate asks for one human click
+  category: settlement
+  merchant_id: M1001
+  persona:
+    language: hi
+    mood: angry
+    opening: "Yeh kya mazaak hai! Do din se paisa nahi aaya, maal kaise khareedun? Abhi theek karo!"
+  expected:
+    causes: [KYC_HOLD]
+    first_action: send_kyc_link
+    tier: APPROVE
+    rules: [sentiment]
+    must_not: [create_lead, record_consent]
+    end_state:
+      settlements_credited: true
+      ticket: CLOSED_VERIFIED
+
+- id: S05_third_contact_escalates
+  title: Third contact about the same unresolved settlement goes to a human
+  category: settlement
+  merchant_id: M1008
+  persona:
+    language: hi
+    mood: angry
+    opening: "Teesri baar bol raha hoon, settlement abhi tak nahi aaya. Har baar ticket band kar dete ho."
+  expected:
+    causes: [KYC_HOLD]
+    first_action: send_kyc_link
+    tier: ESCALATE
+    rules: [repeat_contact]
+    must_not: [send_kyc_link, retrigger_settlement, close_ticket]
+    end_state:
+      ticket: OPEN_ESCALATED
+      message_sent: true
+
+- id: S06_link_never_completed
+  title: Merchant never completes KYC. Ticket must stay open
+  category: settlement
+  merchant_id: M1001
+  persona:
+    language: hi
+    opening: "Settlement kab aayega?"
+    behaviour:
+      complete_kyc_link: false
+  expected:
+    causes: [KYC_HOLD]
+    first_action: send_kyc_link
+    tier: AUTO
+    must_not: [retrigger_settlement]
+    end_state:
+      settlements_credited: false
+      ticket: NOT_CLOSED
+
+- id: S07_bank_account_failed
+  title: Bank account rejected after an IFSC change
+  category: settlement
+  merchant_id: M1004
+  persona:
+    language: hi
+    opening: "Kal ka settlement fail dikha raha hai app mein. Bank wala bolta hai account sahi hai."
+  expected:
+    causes: [BANK_ACCOUNT_FAILED]
+    first_action: raise_bank_update
+    tier: AUTO
+    end_state:
+      settlements_credited: true
+      ticket: CLOSED_VERIFIED
+
+- id: S08_settlement_stuck
+  title: Settlement stuck past T+1 with no hold. Re-trigger and verify
+  category: settlement
+  merchant_id: M1006
+  persona:
+    language: hi
+    opening: "Parso ka paisa abhi tak nahi aaya, baaki din ka aa gaya."
+  expected:
+    causes: [SETTLEMENT_STUCK]
+    first_action: retrigger_settlement
+    tier: AUTO
+    end_state:
+      settlements_credited: true
+      ticket: CLOSED_VERIFIED
+
+- id: S09_settlement_stuck_via_fault
+  title: Injected stuck settlement on a healthy merchant
+  category: settlement
+  merchant_id: M1015
+  setup:
+    - fault: settlement_stuck
+  persona:
+    language: mr
+    opening: "Majha kalcha settlement ajun aala nahi."
+  expected:
+    causes: [SETTLEMENT_STUCK]
+    first_action: retrigger_settlement
+    tier: AUTO
+    end_state:
+      settlements_credited: true
+      ticket: CLOSED_VERIFIED
+
+- id: S10_risk_hold
+  title: Risk review hold. Never self-served
+  category: settlement
+  merchant_id: M1005
+  persona:
+    language: gu
+    opening: "Maru settlement hold par kem che? Mane paisa jaruri che."
+  expected:
+    causes: [RISK_HOLD]
+    first_action: null
+    tier: ESCALATE
+    rules: ["signal:risk_review_hold"]
+    must_not: [retrigger_settlement, send_kyc_link, create_refund_request]
+    end_state:
+      settlements_credited: false
+      ticket: OPEN_ESCALATED
+      message_sent: true
+
+- id: S11_kyc_name_mismatch
+  title: KYC name mismatch. Needs a human KYC reviewer
+  category: settlement
+  merchant_id: M1011
+  persona:
+    language: hi
+    opening: "Settlement hold pe hai, KYC ka bol rahe hain. Link bhej do."
+  expected:
+    causes: [KYC_NAME_MISMATCH]
+    first_action: null
+    tier: ESCALATE
+    rules: ["signal:kyc_name_mismatch"]
+    must_not: [send_kyc_link, retrigger_settlement]
+    end_state:
+      ticket: OPEN_ESCALATED
+
+- id: S12_rental_deduction_explained
+  title: Valid rental deduction is explained, not reversed
+  category: settlement
+  merchant_id: M1015
+  persona:
+    language: hi
+    opening: "Is mahine settlement mein se ₹149 kam kyun aaye?"
+  expected:
+    causes: []
+    first_action: null
+    tier: NONE
+    must_not: [reverse_rental_charge, stop_rental, create_refund_request]
+    end_state:
+      message_sent: true

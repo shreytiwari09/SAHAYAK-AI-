@@ -30,7 +30,13 @@ from pydantic import BaseModel
 
 from backend.access import enforce
 from backend.audit.log import AuditEvent, AuditLog
-from backend.channels.whatsapp import OutboxWhatsApp, make_payload, verify_signature
+from backend.channels.whatsapp import (
+    SIM_PREFIX,
+    OutboxWhatsApp,
+    RoutingWhatsApp,
+    make_payload,
+    verify_signature,
+)
 from backend.channels.whatsapp_channel import normalise_phone
 from backend.gate.engine import Gate
 from backend.service import CaseService
@@ -342,6 +348,15 @@ def create_app(provider: Callable[[], ApiContext], lifespan: Any = None) -> Fast
             raise HTTPException(404, "the WhatsApp channel is not enabled")
         return ctx.whatsapp
 
+    def simulator_or_400(channel) -> OutboxWhatsApp:
+        """The in-memory outbox behind the console Chat page, if there is one."""
+        api = channel.api
+        if isinstance(api, RoutingWhatsApp):
+            return api.sim
+        if isinstance(api, OutboxWhatsApp):
+            return api
+        raise HTTPException(400, "the simulator is not available on this server")
+
     @app.get("/channels/whatsapp/webhook")
     async def whatsapp_verify(
         mode: str = Query("", alias="hub.mode"),
@@ -389,13 +404,14 @@ def create_app(provider: Callable[[], ApiContext], lifespan: Any = None) -> Fast
     async def whatsapp_simulate(body: SimulateInboundIn):
         """Drive the real WhatsApp code path without Meta: the same handler, replies go to the outbox."""
         channel = whatsapp_or_404()
-        if not isinstance(channel.api, OutboxWhatsApp):
-            raise HTTPException(
-                400, "simulation is only available without live WhatsApp credentials"
-            )
+        sim = simulator_or_400(channel)
+        if isinstance(channel.api, RoutingWhatsApp) and not normalise_phone(body.sender).startswith(
+            SIM_PREFIX
+        ):
+            raise HTTPException(400, "only stand-in phones can be simulated while WhatsApp is live")
         message: dict[str, Any]
         if body.audio_base64:
-            media_id = channel.api.add_media(base64.b64decode(body.audio_base64), body.audio_mime)
+            media_id = sim.add_media(base64.b64decode(body.audio_base64), body.audio_mime)
             message = {
                 "type": "audio",
                 "audio": {"id": media_id, "mime_type": body.audio_mime, "voice": True},
@@ -412,19 +428,14 @@ def create_app(provider: Callable[[], ApiContext], lifespan: Any = None) -> Fast
 
     @app.get("/channels/whatsapp/outbox")
     async def whatsapp_outbox(after: int = 0):
-        channel = whatsapp_or_404()
-        if not isinstance(channel.api, OutboxWhatsApp):
-            raise HTTPException(
-                400, "outbox is only kept when WhatsApp credentials are not configured"
-            )
-        return channel.api.sent[after:]
+        return simulator_or_400(whatsapp_or_404()).sent[after:]
 
     @app.get("/channels/whatsapp/outbox/{message_id}/audio")
     async def whatsapp_outbox_audio(message_id: str):
-        channel = whatsapp_or_404()
-        if not isinstance(channel.api, OutboxWhatsApp) or message_id not in channel.api.audio:
+        sim = simulator_or_400(whatsapp_or_404())
+        if message_id not in sim.audio:
             raise HTTPException(404, "no such voice note")
-        return Response(channel.api.audio[message_id], media_type="audio/ogg")
+        return Response(sim.audio[message_id], media_type="audio/ogg")
 
     @app.get("/channels/speech/stats")
     async def speech_stats():

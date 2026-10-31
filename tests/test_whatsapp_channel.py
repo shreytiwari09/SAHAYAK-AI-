@@ -501,3 +501,42 @@ async def test_history_is_trimmed_and_masked_before_the_model_sees_it(rig):
     await rig.send("kuch aur")
     await rig.service.wait(rig.channel.conversations[PHONE].thread_id)
     assert "ABCPK1234Z" not in str(rig.llm.history_seen)
+
+
+# ---------- the console chat while WhatsApp is live ----------
+
+LIVE_PHONE, STAND_IN = "917000000001", "919000001001"
+
+
+async def test_routing_sends_real_phones_to_whatsapp_and_stand_ins_to_the_outbox():
+    from backend.channels.whatsapp import RoutingWhatsApp
+
+    real = OutboxWhatsApp()  # stands in for the Graph API
+    routing = RoutingWhatsApp(real)
+    await routing.send_text(LIVE_PHONE, "to a real phone")
+    await routing.send_buttons(STAND_IN, "to the console", [("HAAN", "Haan")])
+    await routing.mark_read("wamid.IN123")  # a stand-in message: never reported to WhatsApp
+    assert [m["to"] for m in real.sent] == [LIVE_PHONE]
+    assert [m["to"] for m in routing.sim.sent] == [STAND_IN]
+
+
+async def test_console_chat_works_with_live_whatsapp_and_never_reaches_a_real_phone(http, rig):
+    from backend.channels.whatsapp import RoutingWhatsApp
+
+    real = OutboxWhatsApp()
+    rig.channel.api = RoutingWhatsApp(real)
+    rig.links.link(STAND_IN, "M1001")
+
+    refused = await http.post(
+        "/channels/whatsapp/simulate", json={"sender": LIVE_PHONE, "text": "hello"}
+    )
+    assert refused.status_code == 400 and not real.sent  # cannot impersonate a real number
+
+    ok = await http.post(
+        "/channels/whatsapp/simulate", json={"sender": STAND_IN, "text": "settlement nahi aaya"}
+    )
+    assert ok.status_code == 200
+    await rig.settle(STAND_IN)
+    outbox = (await http.get("/channels/whatsapp/outbox")).json()
+    assert outbox and all(m["to"] == STAND_IN for m in outbox)
+    assert not real.sent

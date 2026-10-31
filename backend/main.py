@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from backend.agent.runtime import build_agent, open_audit, open_checkpointer
 from backend.agents import AgentRoster
 from backend.api import ApiContext, create_app
-from backend.channels.whatsapp import OutboxWhatsApp, WhatsAppAPI
+from backend.channels.whatsapp import OutboxWhatsApp, RoutingWhatsApp, WhatsAppAPI
 from backend.channels.whatsapp_channel import LinkStore, WhatsAppChannel
 from backend.config import get_settings
 from backend.pii.masker import PiiMasker
@@ -83,7 +83,8 @@ async def lifespan(app: FastAPI):
                 fallback_transcriber=GeminiTranscriber(cascade) if cascade else None,
             )
         if settings.meta_wa_token and settings.meta_phone_id:
-            transport = WhatsAppAPI(settings.meta_wa_token, settings.meta_phone_id)
+            real_api = WhatsAppAPI(settings.meta_wa_token, settings.meta_phone_id)
+            transport = RoutingWhatsApp(real_api)  # the console's stand-in phones stay off WhatsApp
         else:
             transport = OutboxWhatsApp()  # no credentials: record instead of sending
         channel = WhatsAppChannel(
@@ -114,8 +115,8 @@ async def lifespan(app: FastAPI):
         await service.aclose()
         if speech:
             await speech.aclose()
-        if isinstance(transport, WhatsAppAPI):
-            await transport.aclose()
+        if isinstance(transport, RoutingWhatsApp) and isinstance(transport.real, WhatsAppAPI):
+            await transport.real.aclose()
     if cascade:
         await cascade.aclose()
     if cleanup:

@@ -149,6 +149,41 @@ class OutboxWhatsApp:
         return media_id
 
 
+SIM_MESSAGE_PREFIX = "wamid.IN"  # ids make_payload gives simulated inbound messages
+SIM_PREFIX = "919000"  # the console Chat page's stand-in phones (see console/src/screens/Chat.jsx)
+
+
+class RoutingWhatsApp:
+    """Real phones go to WhatsApp; the console's stand-in phones go to an in-memory outbox.
+
+    So the Chat page keeps working for anyone with the access key while the real number is live,
+    and nothing it sends ever reaches a real phone.
+    """
+
+    def __init__(self, real: Transport, sim: OutboxWhatsApp | None = None):
+        self.real, self.sim = real, sim or OutboxWhatsApp()
+
+    def _for(self, to: str) -> Transport:
+        return self.sim if to.startswith(SIM_PREFIX) else self.real
+
+    async def send_text(self, to: str, body: str) -> str:
+        return await self._for(to).send_text(to, body)
+
+    async def send_buttons(self, to: str, body: str, buttons: list[tuple[str, str]]) -> str:
+        return await self._for(to).send_buttons(to, body, buttons)
+
+    async def send_audio(self, to: str, ogg: bytes) -> str:
+        return await self._for(to).send_audio(to, ogg)
+
+    async def download_media(self, media_id: str) -> tuple[bytes, str]:
+        sim = media_id in self.sim.media
+        return await (self.sim if sim else self.real).download_media(media_id)
+
+    async def mark_read(self, message_id: str) -> None:
+        if not message_id.startswith(SIM_MESSAGE_PREFIX):  # a stand-in message is not on WhatsApp
+            await self.real.mark_read(message_id)
+
+
 # ---------- webhook ----------
 
 
@@ -224,7 +259,7 @@ def make_payload(sender: str, **message: Any) -> dict[str, Any]:
     """A Meta-shaped webhook body for one message (used by the simulator and tests)."""
     msg = {
         "from": sender,
-        "id": f"wamid.IN{time.time_ns()}",
+        "id": f"{SIM_MESSAGE_PREFIX}{time.time_ns()}",
         "timestamp": str(int(time.time())),
         **message,
     }

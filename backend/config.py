@@ -6,7 +6,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    gemini_api_key: str = ""
+    gemini_api_key: str = ""  # one key, or several separated by commas (tried in turn)
+    gemini_api_key_old: str = ""  # an extra key; used when the others run out of quota
     # Best model first. Comma-separated; empty means the built-in default cascade.
     model_cascade: str = ""
     llm_attempt_timeout_seconds: float = 8.0
@@ -48,6 +49,12 @@ class Settings(BaseSettings):
     tool_timeout_seconds: float = 10.0
     # Defaults to backend/gate/policy.yaml next to the gate code.
     policy_path: str | None = None
+
+    @property
+    def gemini_keys(self) -> list[str]:
+        """Every configured Gemini key, in order, without blanks or repeats."""
+        raw = [*self.gemini_api_key.split(","), *self.gemini_api_key_old.split(",")]
+        return list(dict.fromkeys(k.strip() for k in raw if k.strip()))
 
 
 @lru_cache

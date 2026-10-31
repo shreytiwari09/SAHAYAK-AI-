@@ -280,6 +280,54 @@ class GeminiCascade:
         raise LLMRequestError(status, resp.text)  # 400, 401, ...: same on every model
 
 
+class GeminiPool:
+    """Several API keys, each with its own model cascade.
+
+    A call goes to a key that still has models answering, best first. If every model on that key
+    fails (for example its free quota ran out), the next key is tried, so one exhausted key does
+    not stop the bot. With one key this behaves exactly like a single `GeminiCascade`.
+    """
+
+    def __init__(self, keys: list[str], **kwargs: Any):
+        self.cascades = [GeminiCascade(k, **kwargs) for k in keys]
+
+    def _ordered(self) -> list[GeminiCascade]:
+        return sorted(self.cascades, key=lambda c: not c.available())  # stable: keeps key order
+
+    async def generate(self, body: dict[str, Any]) -> LLMResult:
+        failure: CascadeExhausted | None = None
+        for cascade in self._ordered():
+            try:
+                return await cascade.generate(body)
+            except CascadeExhausted as e:
+                failure = e
+        assert failure is not None
+        raise failure
+
+    async def warm_up(self) -> dict[str, dict[str, Any]]:
+        await asyncio.gather(*(c.warm_up() for c in self.cascades))
+        return self.health()
+
+    def health(self) -> dict[str, dict[str, Any]]:
+        """Per model: up if any key can use it, with the counts added together."""
+        merged: dict[str, dict[str, Any]] = {}
+        for cascade in self.cascades:
+            for model, h in cascade.health().items():
+                m = merged.setdefault(
+                    model, {"up": False, "retry_in_seconds": h["retry_in_seconds"], "ok": 0,
+                            "failed": 0, "last_outcome": ""}
+                )  # fmt: skip
+                m["up"] = m["up"] or h["up"]
+                m["retry_in_seconds"] = min(m["retry_in_seconds"], h["retry_in_seconds"])
+                m["ok"] += h["ok"]
+                m["failed"] += h["failed"]
+                m["last_outcome"] = h["last_outcome"] or m["last_outcome"]
+        return merged
+
+    async def aclose(self) -> None:
+        await asyncio.gather(*(c.aclose() for c in self.cascades))
+
+
 def simple_request(prompt: str, system: str | None = None, **generation: Any) -> dict[str, Any]:
     """Convenience for a plain text prompt."""
     body: dict[str, Any] = {"contents": [{"role": "user", "parts": [{"text": prompt}]}]}

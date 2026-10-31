@@ -48,15 +48,15 @@ async def lifespan(app: FastAPI):
         tools = PaytmTools()
 
     cascade = None
-    if settings.fake_llm or not settings.gemini_api_key:
+    if settings.fake_llm or not settings.gemini_keys:
         from eval.fake_llm import FakeLLM
 
         llm = FakeLLM()
     else:
         from backend.agent.llm import GeminiAgentLLM
-        from backend.llm.cascade import GeminiCascade
+        from backend.llm.cascade import GeminiPool
 
-        cascade = GeminiCascade()
+        cascade = GeminiPool(settings.gemini_keys)
         llm = GeminiAgentLLM(cascade)
         await cascade.warm_up()
 

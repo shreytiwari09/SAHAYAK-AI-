@@ -302,3 +302,62 @@ async def test_default_cascade_ends_with_gemma_and_gives_it_a_longer_timeout():
     from backend.llm.cascade import DEFAULT_CASCADE, SLOW_MODELS
 
     assert DEFAULT_CASCADE[-1] == "gemma-4-26b-a4b-it" and SLOW_MODELS["gemma-4-26b-a4b-it"] > 8
+
+
+# ---------- several keys ----------
+
+
+def test_settings_gather_every_key_without_blanks_or_repeats():
+    from backend.config import Settings
+
+    s = Settings(gemini_api_key="a, b,,a", gemini_api_key_old="c", _env_file=None)
+    assert s.gemini_keys == ["a", "b", "c"]
+    assert Settings(_env_file=None).gemini_keys == []
+
+
+async def test_pool_moves_to_the_next_key_when_one_runs_out_of_quota():
+    from backend.llm.cascade import GeminiPool
+
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        key = request.headers["x-goog-api-key"]
+        seen.append(key)
+        if key == "spent":
+            return httpx.Response(429, json={"error": {"message": "quota"}})
+        return httpx.Response(
+            200, json={"candidates": [{"content": {"parts": [{"text": "hello"}]}}]}
+        )
+
+    async def no_sleep(_):
+        return None
+
+    pool = GeminiPool(
+        ["spent", "fresh"], models=["m1", "m2"], passes=1, sleep=no_sleep,
+        client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+    )  # fmt: skip
+    assert (await pool.generate(simple_request("hi"))).text == "hello"
+    assert seen == ["spent", "spent", "fresh"]  # the spent key fails on both models first
+
+    seen.clear()
+    await pool.generate(simple_request("again"))
+    assert seen == ["fresh"]  # the spent key is on cooldown, so it is not asked again
+    health = pool.health()
+    assert health["m1"]["up"] and health["m1"]["failed"] == 1 and health["m1"]["ok"] == 2
+
+
+async def test_pool_raises_when_every_key_is_exhausted():
+    from backend.llm.cascade import GeminiPool
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(429, json={"error": {"message": "quota"}})
+
+    async def no_sleep(_):
+        return None
+
+    pool = GeminiPool(
+        ["a", "b"], models=["m1"], passes=1, sleep=no_sleep,
+        client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+    )  # fmt: skip
+    with pytest.raises(CascadeExhausted):
+        await pool.generate(simple_request("hi"))
